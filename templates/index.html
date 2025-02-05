@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>单词翻译挑战</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .hidden { display: none; }
+        .option-btn { margin: 5px; padding: 10px 20px; }
+        #question-box { margin-bottom: 20px; }
+        #timer, #score { font-weight: bold; }
+        #feedback { color: blue; font-size: 1.1em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>单词翻译挑战</h1>
+    <div id="start-screen">
+        <p>你有60秒时间完成单词翻译题。答对得3分，答错扣1分。</p>
+        <button id="start-btn">开始挑战</button>
+    </div>
+    <div id="game-screen" class="hidden">
+        <div>
+            剩余时间: <span id="timer">60</span> 秒 &nbsp;&nbsp; 当前得分: <span id="score">0</span>
+        </div>
+        <div id="question-box">
+            <p id="english-word"></p>
+            <div id="options"></div>
+            <p id="feedback"></p>
+        </div>
+    </div>
+    <div id="result-screen" class="hidden">
+        <h2>挑战结束！</h2>
+        <p>你的得分: <span id="final-score"></span></p>
+        <div id="record-form">
+            <h3>记录成绩</h3>
+            <form action="{{ url_for('save_score_route') }}" method="post">
+                <input type="hidden" name="score" id="form-score">
+                <input type="hidden" name="token" value="{{ token }}">
+                <p>姓名: <input type="text" name="name" required></p>
+                <p>学校: <input type="text" name="school" required></p>
+                <p>班级: <input type="text" name="class_info" required></p>
+                <button type="submit" name="action" value="save">保存成绩</button>
+                <button type="submit" name="action" value="nosave">不保存成绩</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 添加调试日志
+        console.log('Initial script loading...');
+        
+        // 确保正确解析 word_db
+        let wordDatabase;
+        try {
+            wordDatabase = {{ word_db | safe }};
+            console.log('Word database loaded:', wordDatabase);
+        } catch (e) {
+            console.error('Error loading word database:', e);
+            wordDatabase = []; // 设置默认值防止崩溃
+        }
+
+        let score = 0;
+        let timeLimit = 60;
+        let timerInterval;
+        let currentQuestion = null;
+
+        // 获取所有 DOM 元素
+        const startBtn = document.getElementById("start-btn");
+        const startScreen = document.getElementById("start-screen");
+        const gameScreen = document.getElementById("game-screen");
+        const resultScreen = document.getElementById("result-screen");
+        const timerDisplay = document.getElementById("timer");
+        const scoreDisplay = document.getElementById("score");
+        const englishWordElem = document.getElementById("english-word");
+        const optionsDiv = document.getElementById("options");
+        const feedbackElem = document.getElementById("feedback");
+        const finalScoreElem = document.getElementById("final-score");
+        const formScore = document.getElementById("form-score");
+
+        // 添加点击事件监听器并验证是否正确添加
+        if (startBtn) {
+            console.log('Adding click event listener to start button');
+            startBtn.addEventListener("click", startChallenge);
+        } else {
+            console.error('Start button not found!');
+        }
+
+        function startChallenge() {
+            console.log('Challenge started!');
+            if (!wordDatabase || wordDatabase.length === 0) {
+                console.error('Word database is empty or not loaded!');
+                return;
+            }
+
+            score = 0;
+            timeLimit = 60;
+            scoreDisplay.textContent = score;
+            timerDisplay.textContent = timeLimit;
+            startScreen.classList.add("hidden");
+            gameScreen.classList.remove("hidden");
+            nextQuestion();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            timeLimit--;
+            timerDisplay.textContent = timeLimit;
+            if (timeLimit <= 0) {
+                endChallenge();
+            }
+        }
+
+        function nextQuestion() {
+            console.log('Setting up next question...');
+            if (timeLimit <= 0) return;
+            
+            if (!wordDatabase || wordDatabase.length === 0) {
+                console.error('Cannot generate question: word database is empty');
+                return;
+            }
+
+            currentQuestion = wordDatabase[Math.floor(Math.random() * wordDatabase.length)];
+            console.log('Current question:', currentQuestion);
+
+            const correctAnswer = currentQuestion.chinese;
+            let wrongOptions = wordDatabase.filter(item => item.chinese !== correctAnswer)
+                                           .map(item => item.chinese);
+            let wrongChoices = [];
+            while (wrongChoices.length < 3) {
+                let choice = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+                if (!wrongChoices.includes(choice)) {
+                    wrongChoices.push(choice);
+                }
+            }
+            let options = wrongChoices.concat([correctAnswer]);
+            options.sort(() => Math.random() - 0.5);
+
+            englishWordElem.textContent = "翻译单词: " + currentQuestion.english;
+            optionsDiv.innerHTML = "";
+            options.forEach((opt, index) => {
+                let btn = document.createElement("button");
+                btn.textContent = (index + 1) + ". " + opt;
+                btn.className = "option-btn";
+                btn.addEventListener("click", function() {
+                    checkAnswer(opt, correctAnswer);
+                });
+                optionsDiv.appendChild(btn);
+            });
+            feedbackElem.textContent = "";
+        }
+
+        function checkAnswer(selected, correct) {
+            console.log('Checking answer:', selected, 'Correct:', correct);
+            if (selected === correct) {
+                feedbackElem.textContent = "回答正确！得分 +3";
+                score += 3;
+            } else {
+                feedbackElem.textContent = "回答错误！正确答案是: " + correct + "，扣分 -1";
+                score -= 1;
+            }
+            scoreDisplay.textContent = score;
+            setTimeout(function(){
+                feedbackElem.textContent = "";
+                nextQuestion();
+            }, 1000);
+        }
+
+        function endChallenge() {
+            console.log('Challenge ended. Final score:', score);
+            clearInterval(timerInterval);
+            gameScreen.classList.add("hidden");
+            resultScreen.classList.remove("hidden");
+            finalScoreElem.textContent = score;
+            formScore.value = score;
+        }
+    </script>
+</body>
+</html>
