@@ -5,6 +5,8 @@ import os
 import random
 import json
 import uuid
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default_secret_key")
@@ -145,7 +147,10 @@ def save_score_route():
         school = request.form.get("school")
         class_info = request.form.get("class_info")
         if all([score, name, school, class_info]):
-            record = [score, name, school, class_info, time.strftime("%Y-%m-%d %H:%M:%S")]
+            tz = pytz.timezone('Asia/Shanghai')
+            current_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+            record = [score, name, school, class_info, current_time]
             records = []
             if os.path.exists(LEADERBOARD_FILE):
                 with open(LEADERBOARD_FILE, "r", newline='', encoding="utf-8") as csvfile:
